@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>惊蛰疼痛类型诊断</title>
+    <style>
+        :root {
+            --main-bg: #2A3B4C;
+            --text-color: #E2E8C0;
+            --card-bg: rgba(255,255,255,0.1);
+        }
+
+        body {
+            font-family: 'Microsoft Yahei', sans-serif;
+            background: var(--main-bg);
+            color: var(--text-color);
+            padding: 20px;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .question-card {
+            background: var(--card-bg);
+            border-radius: 10px;
+            padding: 20px;
+            margin: 15px 0;
+            display: none;
+        }
+
+        .question-card.active {
+            display: block;
+            animation: fadeIn 0.5s;
+        }
+
+        .option-btn {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            margin: 8px 0;
+            border: 2px solid #4A5B6C;
+            border-radius: 8px;
+            background: none;
+            color: var(--text-color);
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .option-btn:hover {
+            border-color: #5A6B7C;
+            transform: translateY(-2px);
+        }
+
+        #result-page {
+            display: none;
+            background: var(--card-bg);
+            padding: 25px;
+            border-radius: 10px;
+        }
+
+        #poster-canvas {
+            display: none;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div id="questions-container"></div>
+        
+        <div id="result-page">
+            <h2>🎯 诊断结果：<span id="result-type"></span></h2>
+            <div id="result-desc"></div>
+            <button id="generate-poster" style="margin-top:20px">📸 生成分享海报</button>
+        </div>
+    </div>
+
+    <canvas id="poster-canvas"></canvas>
+
+    <script>
+        // 完整题库配置
+        const questions = [
+          {
+            question: "1. 你最近一次“伪努力”名场面是？",
+            options: [
+                { text: "🧻 给猫讲时间管理，自己刷手机到三点", type: "悬雨型", weight: 1.0 },
+                { text: "📚 买《断舍离》的书导致书架更拥挤", type: "枯枝型", weight: 0.8 },
+                { text: "🧘 下载冥想APP后唯一打开的是评分页", type: "锈蚀型", weight: 1.5 },
+                { text: "🎯 把年度计划改成“先活着再说”", type: "胀痛型", weight: 1.2 }
+            ],
+            typeWeight: 1.0
+          },
+          {
+            question: "2. 你常用的自我欺骗话术是？",
+            options: [
+                { text: "🌟 “压力越大效率越高”", type: "枯枝型", weight: 0.8 },
+                { text: "💡 “我在酝酿创造性拖延”", type: "悬雨型", weight: 1.0 },
+                { text: "⏳ “等看完这集就开始”", type: "锈蚀型", weight: 1.5 },
+                { text: "🧩 “碎片化学习也是学习”", type: "胀痛型", weight: 1.2 }
+            ],
+            typeWeight: 1.0
+          },
+          {
+            question: "3. 哪种痛感最接近你的生活底色？",
+            options: [
+                { text: "🔩 钝器击打的闷痛", type: "锈蚀型", weight: 1.2 },
+                { text: "🔪 锐器划过的刺痛", type: "悬雨型", weight: 1.0 },
+                { text: "🧪 化学腐蚀的灼痛", type: "胀痛型", weight: 1.5 },
+                { text: "🧊 冻伤的幻痛", type: "枯枝型", weight: 0.8 }
+            ],
+            typeWeight: 1.5
+          },
+          {
+            question: "4. 你的焦虑通常如何显形？",
+            options: [
+                { text: "🕸️ 凌晨三点的淘宝记录", type: "枯枝型", weight: 0.8 },
+                { text: "📱 锁屏占满待办事项", type: "悬雨型", weight: 1.0 },
+                { text: "🧠 大脑播放失败蒙太奇", type: "胀痛型", weight: 1.5 },
+                { text: "🌀 对小事产生毁灭强迫", type: "锈蚀型", weight: 1.2 }
+            ],
+            typeWeight: 1.5
+          },
+          {
+            question: "5. 你与家中某件物品的共生关系是？",
+            options: [
+                { text: "🧥 发霉的旧大衣", type: "枯枝型", weight: 0.8 },
+                { text: "📦 未拆快递箱", type: "悬雨型", weight: 1.0 },
+                { text: "🖇️ 弯曲的回形针", type: "锈蚀型", weight: 1.5 },
+                { text: "🕯️ 积灰的香薰", type: "胀痛型", weight: 1.2 }
+            ],
+            typeWeight: 0.8
+          },
+          {
+            question: "6. 你手机相册的最新废片类型是？",
+            options: [
+                { text: "🌆 失败的夕阳", type: "悬雨型", weight: 1.0 },
+                { text: "📝 遗忘的灵感", type: "胀痛型", weight: 1.2 },
+                { text: "🥗 摆拍减脂餐", type: "锈蚀型", weight: 1.5 },
+                { text: "🪞 未发的自拍", type: "枯枝型", weight: 0.8 }
+            ],
+            typeWeight: 0.8
+          },
+          {
+            question: "7. 你正在被哪种时间黑洞吞噬？",
+            options: [
+                { text: "⏰ 床上刷手机两小时", type: "悬雨型", weight: 1.0 },
+                { text: "📅 等第八个月时机", type: "枯枝型", weight: 0.8 },
+                { text: "🛋️ 周末沙发坍缩", type: "锈蚀型", weight: 1.5 },
+                { text: "🚇 通勤行尸走肉", type: "胀痛型", weight: 1.2 }
+            ],
+            typeWeight: 1.2
+          },
+          {
+            question: "8. 你的人生进度条卡在哪个副本？",
+            options: [
+                { text: "🎮 新手教程", type: "锈蚀型", weight: 1.5 },
+                { text: "🔄 读档失败", type: "胀痛型", weight: 1.2 },
+                { text: "🧩 无用收集", type: "枯枝型", weight: 0.8 },
+                { text: "🌫️ 迷雾地图", type: "悬雨型", weight: 1.0 }
+            ],
+            typeWeight: 1.2
+          },
+          {
+            question: "9. 你的摆烂美学代表作是？",
+            options: [
+                { text: "☁️ 待办变遗愿清单", type: "枯枝型", weight: 0.8 },
+                { text: "🧟 丧尸模式过ddl", type: "锈蚀型", weight: 1.5 },
+                { text: "🌪️ 焦虑中叠纸鹤", type: "悬雨型", weight: 1.0 },
+                { text: "🎭 编写社交人格手册", type: "胀痛型", weight: 1.2 }
+            ],
+            typeWeight: 1.0
+          },
+          {
+            question: "10. 哪种“无效自救”你屡试不爽？",
+            options: [
+                { text: "📿 转发锦鲤", type: "枯枝型", weight: 0.8 },
+                { text: "📉 丧组找正能量", type: "悬雨型", weight: 1.0 },
+                { text: "🥤 奶茶多巴胺", type: "胀痛型", weight: 1.2 },
+                { text: "🧘 收藏未看视频", type: "锈蚀型", weight: 1.5 }
+            ],
+            typeWeight: 1.0
+          },
+          {
+            question: "11. 你体内的未爆种子正在成为...",
+            options: [
+                { text: "🪶 隐秘倒刺", type: "锈蚀型", weight: 1.5 },
+                { text: "🧬 变异基因", type: "胀痛型", weight: 1.2 },
+                { text: "⏳ 生锈时针", type: "悬雨型", weight: 1.0 },
+                { text: "🌱 沉默根系", type: "枯枝型", weight: 0.8 }
+            ],
+            typeWeight: 1.3
+          },
+          {
+            question: "12. 你与春天的关系更接近...",
+            options: [
+                { text: "🧊 冻土暗流", type: "胀痛型", weight: 1.2 },
+                { text: "🔥 火柴余烬", type: "枯枝型", weight: 0.8 },
+                { text: "🪞 哈哈镜映像", type: "悬雨型", weight: 1.0 },
+                { text: "🪁 断线风筝", type: "锈蚀型", weight: 1.5 }
+            ],
+            typeWeight: 1.3
+          }
+        ];
+
+        // 初始化
+        let currentQ = 0;
+        let scores = { 锈蚀型:0, 悬雨型:0, 胀痛型:0, 枯枝型:0 };
+        const qContainer = document.getElementById('questions-container');
+
+        // 动态生成问题卡片
+        questions.forEach((q, index) => {
+            const card = document.createElement('div');
+            card.className = 'question-card';
+            card.innerHTML = `
+                <h3>${q.question}</h3>
+                ${q.options.map(opt => `
+                    <button class="option-btn" 
+                            data-type="${opt.type}" 
+                            data-weight="${opt.weight}">
+                        ${opt.text}
+                    </button>
+                `).join('')}
+            `;
+            qContainer.appendChild(card);
+        });
+
+        // 显示第一个问题
+        qContainer.children[0].classList.add('active');
+
+        // 选项点击处理
+        document.addEventListener('click', (e) => {
+            if(!e.target.classList.contains('option-btn')) return;
+            
+            const type = e.target.dataset.type;
+            const weight = parseFloat(e.target.dataset.weight) * questions[currentQ].typeWeight;
+            scores[type] += weight;
+
+            showNextQuestion();
+        });
+
+        function showNextQuestion() {
+            qContainer.children[currentQ].classList.remove('active');
+            currentQ++;
+            
+            if(currentQ < questions.length) {
+                qContainer.children[currentQ].classList.add('active');
+            } else {
+                showResult();
+            }
+        }
+
+        // 显示结果
+        function showResult() {
+            const resultType = calculateResult();
+            document.getElementById('result-page').style.display = 'block';
+            document.getElementById('result-type').textContent = resultType;
+            document.getElementById('result-desc').innerHTML = getResultDesc(resultType);
+        }
+
+        // 计算结果
+        function calculateResult() {
+            let maxScore = Math.max(...Object.values(scores));
+            let candidates = Object.keys(scores).filter(k => scores[k] === maxScore);
+            const priority = ['锈蚀型', '胀痛型', '悬雨型', '枯枝型'];
+            return priority.find(t => candidates.includes(t));
+        }
+
+        // 海报生成（900×1500px版本）
+        document.getElementById('generate-poster').addEventListener('click', () => {
+            const canvas = document.getElementById('poster-canvas');
+            const ctx = canvas.getContext('2d');
+            
+            // 设置画布尺寸
+            canvas.width = 1500;
+            canvas.height = 900;
+
+            // 绘制背景
+            ctx.fillStyle = '#2A3B4C';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 绘制标题
+            ctx.fillStyle = '#E2E8C0';
+            ctx.font = 'bold 40px Microsoft Yahei';
+            ctx.fillText('惊蛰疼痛类型诊断报告', 50, 80);
+
+            // 绘制诊断结果
+            const resultType = document.getElementById('result-type').textContent;
+            ctx.font = 'bold 56px Microsoft Yahei';
+            ctx.fillText(`「${resultType}」`, 50, 160);
+
+            // 绘制详细描述
+            ctx.font = '24px Microsoft Yahei';
+            let yPos = 220;
+            
+            // 获取描述内容
+            const desc = document.getElementById('result-desc').innerHTML;
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = desc;
+            
+            // 遍历所有子元素
+            Array.from(tempDiv.children).forEach(element => {
+                switch(element.tagName) {
+                    case 'H3':
+                        ctx.font = 'bold 32px Microsoft Yahei';
+                        ctx.fillText(element.textContent, 50, yPos);
+                        yPos += 50;
+                        break;
+                        
+                    case 'P':
+                        ctx.font = '24px Microsoft Yahei';
+                        wrapText(ctx, element.textContent, 50, yPos, 800, 30);
+                        yPos += getTextHeight(ctx, element.textContent, 800) * 30 + 20;
+                        break;
+                        
+                    case 'UL':
+                        Array.from(element.children).forEach(li => {
+                            ctx.fillText('• ' + li.textContent, 70, yPos);
+                            yPos += 35;
+                        });
+                        break;
+                        
+                    case 'BLOCKQUOTE':
+                        ctx.fillStyle = 'rgba(226,232,192,0.8)';
+                        ctx.font = 'italic 28px Microsoft Yahei';
+                        wrapText(ctx, element.textContent, 100, yPos, 700, 35);
+                        yPos += getTextHeight(ctx, element.textContent, 700) * 35 + 40;
+                        ctx.fillStyle = '#E2E8C0';
+                        break;
+                }
+            });
+
+            // 添加装饰线
+            ctx.beginPath();
+            ctx.moveTo(50, 780);
+            ctx.lineTo(842, 780);
+            ctx.strokeStyle = '#E2E8C0';
+            ctx.stroke();
+
+            // 生成下载链接
+            const link = document.createElement('a');
+            link.download = '诊断报告.png';
+            link.href = canvas.toDataURL();
+            link.click();
+        });
+
+        // 文本换行函数
+        function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
+            const words = text.split(' ');
+            let line = '';
+            
+            for(let n = 0; n < words.length; n++) {
+                const testLine = line + words[n] + ' ';
+                const metrics = ctx.measureText(testLine);
+                if (metrics.width > maxWidth && n > 0) {
+                    ctx.fillText(line, x, y);
+                    line = words[n] + ' ';
+                    y += lineHeight;
+                } else {
+                    line = testLine;
+                }
+            }
+            ctx.fillText(line, x, y);
+        }
+
+        // 计算文本高度
+        function getTextHeight(ctx, text, maxWidth) {
+            const words = text.split(' ');
+            let line = '';
+            let lineCount = 1;
+            
+            for(let n = 0; n < words.length; n++) {
+                const testLine = line + words[n] + ' ';
+                const metrics = ctx.measureText(testLine);
+                if (metrics.width > maxWidth && n > 0) {
+                    lineCount++;
+                    line = words[n] + ' ';
+                } else {
+                    line = testLine;
+                }
+            }
+            return lineCount;
+        }
+
+        // 结果描述内容
+  function getResultDesc(type) {
+            const descMap = {
+                锈蚀型: `
+                    <h3>🔩 核心特征</h3>
+                    <p>你像一枚被遗忘在潮湿角落的螺丝钉，表面斑驳的锈迹下仍保留金属的倔强。那些未说出口的变革冲动，正在氧化层下酝酿微型爆破。</p>
+                    <h3>🌧️ 形成原因</h3>
+                    <p>长期在「安全」与「改变」的夹缝中妥协，如同弹簧持续承受临界压力，导致能量以焦虑形式锈蚀性泄漏。</p>
+                    <h3>📍 表现场景</h3>
+                    <ul>
+                        <li>收藏无数自律攻略却从未执行</li>
+                        <li>深夜脑内预演完美计划，清晨继续惯性躺平</li>
+                        <li>对现状不满却用「至少稳定」自我麻痹
+</li>
+                    </ul>
+                    <blockquote>💬 共鸣金句："所有不敢爆发的沉默，终将腐烂成枷锁"</blockquote>
+                `,
+                悬雨型: `
+                    <h3>⏳ 核心特征</h3>
+                    <p>你是空中那滴被按下暂停键的雨，既不能痛快坠落，也无法退回云层。未完成的事项在备忘录里无限增殖，形成透明的压迫穹顶。</p>
+                    <h3>🌧️ 形成原因</h3>
+                    <p>过度追求「完美起跳姿势」，导致决策瘫痪。如同等待百分百适配的拼图，却让整幅人生蓝图悬浮在虚空中。</p>
+                    <h3>📍 表现场景</h3>
+                    <ul>
+                        <li>购物车收藏37个健身教程仍未开始</li>
+                        <li>旅行计划从「等存够钱」变成「等退休」</li>
+                        <li>用「准备中」的标签覆盖所有进行时</li>
+                    </ul>
+                    <blockquote>💬 共鸣金句："那些永不坠落的雨，终将蒸发成时代的潮湿"</blockquote>
+                `,
+                胀痛型: `
+                    <h3>🌱 核心特征</h3>
+                    <p>你体内沉睡的种子正试图顶开岩石，发芽的欲望与现实的板结土层持续角力。这种生长痛既带着希望的血腥气，又掺杂自我怀疑的酸涩。</p>
+                    <h3>🌧️ 形成原因</h3>
+                    <p>天赋与现实的错位挤压，如同被错误栽种在水泥缝隙的植物，既要对抗环境又要警惕自我异化。</p>
+                    <h3>📍 表现场景</h3>
+                    <ul>
+                        <li>在擅长但不热爱的工作中机械重复</li>
+                        <li>深夜被「我本可以」的念头刺痛惊醒</li>
+                        <li>用「至少稳定」镇压内心的「万一呢</li>
+                    </ul>
+                    <blockquote>💬 共鸣金句："所有不敢破土的种子，都是写给大地的遗书"</blockquote>
+                `,
+                枯枝型: `
+                    <h3>🍂 核心特征</h3>
+                    <p>你像一棵在寒冬中忘记落叶的树，枯槁的枝条仍固执地维持体面姿态。那些早该被舍弃的习惯、关系、执念，正以怀旧之名行腐蚀之实。</p>
+                    <h3>🌧️ 形成原因</h3>
+                    <p>过度依赖「过去完成时」的荣耀，导致新陈代谢机制瘫痪。如同不断给干花喷洒防腐剂，拒绝承认鲜活已逝。</p>
+                    <h3>📍 表现场景</h3>
+                    <ul>
+                        <li>用「当年勇」反复腌制现状的苍白</li>
+                        <li>保留所有前任礼物构筑悲伤博物馆</li>
+                        <li>把「习惯」当「热爱」，持续空心化执行</li>
+                    </ul>
+                    <blockquote>💬 共鸣金句："灰烬的尊严，在于承认火焰来过"</blockquote>
+                `
+            };
+            return descMap[type];
+        }
+    </script>
+</body>
+</html>
